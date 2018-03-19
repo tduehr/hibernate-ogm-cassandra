@@ -12,31 +12,41 @@
         <groupId>org.hibernate.ogm</groupId>
         <artifactId>hibernate-ogm-bom</artifactId>
         <version>5.3.0-SNAPSHOT</version>
+        <relativePath>bom/pom.xml</relativePath>
     </parent>
 
-    <artifactId>hibernate-ogm-cassandra-parent</artifactId>
+    <artifactId>hibernate-ogm-parent</artifactId>
     <packaging>pom</packaging>
 
-    <name>Hibernate OGM Cassandra Aggregator</name>
-    <description>Hibernate OGM Cassandra Aggregator POM</description>
+    <name>Hibernate OGM Aggregator</name>
+    <description>Hibernate OGM Aggregator POM</description>
 
     <modules>
-        <module>cassandra</module>
-        <module>modules</module>
+        <module>bom</module>
+        <module>core</module>
+        <!-- <module>infinispan</module> Is only enabled when not running in Java 9: see the profiles section-->
+        <!-- <module>infinispan-remote</module> Is only enabled when not running in Java 9: see the profiles section-->
+        <module>mongodb</module>
+        <!-- <module>neo4j</module> Is only enabled when not running in Java 9: see the profiles section-->
+        <module>jipijapa</module>
+        <!-- <module>modules</module> The modules require all of the above modules to be enabled -->
+        <module>performance</module>
     </modules>
 
     <properties>
-        <!-- JDK version required to build OGM; requiring 1.8 as WildFly 10 requires JDK 1.8; We still create
-             1.7 byte code to run in other environments -->
         <minJdkVersion>1.8</minJdkVersion>
-        <jdkTargetForProcessor>1.7</jdkTargetForProcessor>
+
+        <maven.compiler.source>${minJdkVersion}</maven.compiler.source>
+        <maven.compiler.target>${minJdkVersion}</maven.compiler.target>
+
+        <jdkTargetForProcessor>${minJdkVersion}</jdkTargetForProcessor>
         <!-- test / build-only dependency versions, managed below -->
         <jbossNamingVersion>7.1.0.Final</jbossNamingVersion>
         <shrinkwrapVersion>1.2.2</shrinkwrapVersion>
-        <arquillianVersion>1.1.5.Final</arquillianVersion>
+        <arquillianVersion>1.2.0.Final</arquillianVersion>
+        <wildflyArquillianVersion>2.1.0.Final</wildflyArquillianVersion>
         <jmhVersion>1.0</jmhVersion>
-        <jbossLoggingProcessorVersion>1.2.0.Final</jbossLoggingProcessorVersion>
-        <bytemanVersion>3.0.6</bytemanVersion>
+        <bytemanVersion>4.0.0-BETA5</bytemanVersion>
 
         <!--
              Following is the default jgroups mcast address.  If you find the testsuite runs very slowly, there
@@ -47,22 +57,17 @@
         <jgroups.bind_addr>127.0.0.1</jgroups.bind_addr>
         <skipUnitTests>false</skipUnitTests>
 
-        <!-- Cassandra -->
-        <cassandraVersion>3.3.2</cassandraVersion>
-        <!-- Update dependency versions accordingly when updating C*  -->
-        <!--
-             The following versions are required for the Cassandra driver; We don't expose a managed versions
-             of these libraries through this BOM, these versions are for internal usage to make sure the right
-             JARs end up in the C* driver WildFly module
-        -->
-        <cassandraCodahaleMetricsVersion>3.3.2</cassandraCodahaleMetricsVersion>
-
-        <!-- Guava version for Cassandra-->
-        <cassandraGuavaVersion>23.0</cassandraGuavaVersion>
+        <!-- The following properties configure the embedded MongoDB instance used for tests -->
+        <embeddedMongoDbVersion>${mongodbVersion}</embeddedMongoDbVersion>
+        <embeddedMongoDbBindIp>127.0.0.1</embeddedMongoDbBindIp>
+        <embeddedMongoDbTempDir>${project.build.directory}${file.separator}embeddedMongoDb${file.separator}extracted</embeddedMongoDbTempDir>
+        <embeddedMongoDbLogDir>${project.build.directory}${file.separator}embeddedMongoDb${file.separator}logs</embeddedMongoDbLogDir>
+        <!-- Not using default port to reduce chances of shutting down an external MongoDB instance -->
+        <embeddedMongoDbPort>27018</embeddedMongoDbPort>
 
         <!-- Target version of WildFly (for testing and JipiJapa integration) -->
-        <version.wildfly>10.1.0.Final</version.wildfly>
-        <hibernateWildflyClassifier>wildfly-10-dist</hibernateWildflyClassifier>
+        <version.wildfly>11.0.0.Final</version.wildfly>
+        <hibernateWildflyClassifier>wildfly-11-dist</hibernateWildflyClassifier>
 
         <!-- Asciidoctor -->
         <hibernate-asciidoctor-theme.version>1.0.1.Final</hibernate-asciidoctor-theme.version>
@@ -70,26 +75,12 @@
         <jruby.version>1.7.26</jruby.version>
         <asciidoctorj.version>1.5.4.1</asciidoctorj.version>
         <asciidoctorj-pdf.version>1.5.0-alpha.11</asciidoctorj-pdf.version>
-        <github.global.server>github</github.global.server>
     </properties>
-
-    <distributionManagement>
-        <repository>
-            <id>internal.repo</id>
-            <name>Temporary Staging Repository</name>
-            <url>file://${project.build.directory}/mvn-repo</url>
-        </repository>
-    </distributionManagement>
 
     <!-- Only for management of test-scoped dependencies; All other dependencies (which are exposed to users) are
          managed in the BOM -->
     <dependencyManagement>
         <dependencies>
-            <dependency>
-                <groupId>org.hibernate.ogm</groupId>
-                <artifactId>hibernate-ogm-cassandra</artifactId>
-                <version>${project.version}</version>
-            </dependency>
             <dependency>
                 <groupId>junit</groupId>
                 <artifactId>junit</artifactId>
@@ -198,7 +189,7 @@
             <dependency>
                 <groupId>org.jboss</groupId>
                 <artifactId>jboss-transaction-spi</artifactId>
-                <version>7.3.0.Final</version>
+                <version>${jbossTransactionSPIVersion}</version>
                 <exclusions>
                     <exclusion>
                         <groupId>org.jboss.logging</groupId>
@@ -226,6 +217,36 @@
         <defaultGoal>install</defaultGoal>
         <plugins>
             <plugin>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>2.8.2</version>
+                <configuration>
+                    <altDeploymentRepository>internal.repo::default::file://${user.dir}/target/mvn-repo</altDeploymentRepository>
+                </configuration>
+            </plugin>
+            <plugin>
+                 <groupId>com.github.github</groupId>
+                 <artifactId>site-maven-plugin</artifactId>
+                 <version>0.12</version>
+                 <configuration>
+                     <message>Maven artifacts for ${project.version}</message>  <!-- git commit message -->
+                     <noJekyll>true</noJekyll>                                  <!-- disable webpage processing -->
+                     <outputDirectory>${user.dir}/target/mvn-repo</outputDirectory> <!-- matches distribution management repository url above -->
+                     <branch>refs/heads/mvn-repo</branch>                       <!-- remote branch name -->
+                     <includes><include>**/*</include></includes>
+                     <repositoryName>hibernate-ogm-cassandra</repositoryName>      <!-- github repo name -->
+                     <repositoryOwner>tduehr</repositoryOwner>    <!-- github username  -->
+                 </configuration>
+                 <executions>
+                   <!-- run site-maven-plugin's 'site' target as part of the build's normal 'deploy' phase -->
+                   <execution>
+                     <goals>
+                       <goal>site</goal>
+                     </goals>
+                     <phase>deploy</phase>
+                   </execution>
+                 </executions>
+             </plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>buildnumber-maven-plugin</artifactId>
             </plugin>
@@ -233,8 +254,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <showWarnings>true</showWarnings>
-                    <source>1.7</source>
-                    <target>1.7</target>
+                    <source>${minJdkVersion}</source>
+                    <target>${minJdkVersion}</target>
                     <encoding>UTF-8</encoding>
                     <!-- Annotation processor is run as an independent step -->
                     <proc>none</proc>
@@ -331,49 +352,26 @@
                             <versionString>${hibernateSearchVersion}</versionString>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>parse-mongodb-version</id>
+                        <goals>
+                            <goal>parse-version</goal>
+                        </goals>
+                        <configuration>
+                            <propertyPrefix>mongodbParsedVersion</propertyPrefix>
+                            <versionString>${mongodbVersion}</versionString>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
-            <plugin>
-                <artifactId>maven-deploy-plugin</artifactId>
-                <version>2.8.2</version>
-                <configuration>
-                    <altDeploymentRepository>internal.repo::default::file://${user.dir}/target/mvn-repo</altDeploymentRepository>
-                </configuration>
-            </plugin>
-            <plugin>
-                 <groupId>com.github.github</groupId>
-                 <artifactId>site-maven-plugin</artifactId>
-                 <version>0.12</version>
-                 <configuration>
-                     <message>Maven artifacts for ${project.version}</message>  <!-- git commit message -->
-                     <noJekyll>true</noJekyll>                                  <!-- disable webpage processing -->
-                     <outputDirectory>${user.dir}/target/mvn-repo</outputDirectory> <!-- matches distribution management repository url above -->
-                     <branch>refs/heads/mvn-repo</branch>                       <!-- remote branch name -->
-                     <includes><include>**/*</include></includes>
-                     <repositoryName>hibernate-ogm-cassandra</repositoryName>      <!-- github repo name -->
-                     <repositoryOwner>tduehr</repositoryOwner>    <!-- github username  -->
-                 </configuration>
-                 <executions>
-                   <!-- run site-maven-plugin's 'site' target as part of the build's normal 'deploy' phase -->
-                   <execution>
-                     <goals>
-                       <goal>site</goal>
-                     </goals>
-                     <phase>deploy</phase>
-                   </execution>
-                 </executions>
-             </plugin>
         </plugins>
         <pluginManagement>
             <plugins>
                 <plugin>
-                    <artifactId>maven-deploy-plugin</artifactId>
-                    <version>2.8.2</version>
+                    <groupId>org.wildfly.build</groupId>
+                    <artifactId>wildfly-server-provisioning-maven-plugin</artifactId>
+                    <version>1.2.7.Final</version>
                 </plugin>
-                <plugin>
-                     <artifactId>site-maven-plugin</artifactId>
-                     <version>0.12</version>
-                 </plugin>
                 <plugin>
                     <artifactId>maven-antrun-plugin</artifactId>
                     <version>1.8</version>
@@ -381,12 +379,48 @@
                 <plugin>
                     <artifactId>maven-javadoc-plugin</artifactId>
                     <version>2.10.3</version>
-                    <executions>
-                        <execution>
-                            <id>attach-javadocs</id>
-                            <goals><goal>jar</goal></goals>
-                        </execution>
-                    </executions>
+                    <configuration>
+                        <quiet>true</quiet>
+                        <!--
+                        For some reason the 'javadoc' goal (used in individual projects to generate the javadoc)
+                        targets the report output directory, while the 'jar' goal (used in the javadoc module
+                        to aggregate the javadoc) searches for pre-existing javadoc in the non-report output directory...
+                        As a result, the jar goal displays some warnings about the javadoc not being found and
+                        regenerates it. This sets the report output directory to the same path as the non-report one,
+                        which solves the problem.
+                         -->
+                        <reportOutputDirectory>${project.build.directory}/apidocs</reportOutputDirectory>
+                        <additionalDependencies>
+                            <additionalDependency>
+                                <groupId>org.jboss.logging</groupId>
+                                <artifactId>jboss-logging-annotations</artifactId>
+                                <version>${jbossLoggingProcessorVersion}</version>
+                            </additionalDependency>
+                            <dependency>
+                                <groupId>org.jboss.spec.javax.transaction</groupId>
+                                <artifactId>jboss-transaction-api_1.2_spec</artifactId>
+                                <version>${jbossJtaAPIVersion}</version>
+                            </dependency>
+                        </additionalDependencies>
+                        <!-- Exclude implementation classes from the javadoc -->
+                        <excludePackageNames>*.impl,*.impl.*</excludePackageNames>
+                        <tags>
+                            <tag>
+                                <name>experimental</name>
+                                <placement>a</placement>
+                                <head>Experimental</head>
+                            </tag>
+                        </tags>
+                        <links>
+                            <link>https://docs.oracle.com/javase/8/docs/api/</link>
+                            <link>http://docs.jboss.org/hibernate/orm/5.2/javadocs/</link>
+                            <link>http://docs.jboss.org/hibernate/search/5.9/api/</link>
+                            <link>http://lucene.apache.org/core/5_5_4/core/</link>
+                        </links>
+                        <bottom>
+                            <![CDATA[Copyright &copy; ${project.inceptionYear}-{currentYear} <a href="https://www.redhat.com/">Red Hat, Inc.</a> and others. Licensed under the GNU Lesser General Public License (LGPL), version 2.1 or later.]]>
+                        </bottom>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <artifactId>maven-jar-plugin</artifactId>
@@ -426,7 +460,7 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-enforcer-plugin</artifactId>
-                    <version>1.4.1</version>
+                    <version>3.0.0-M1</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-checkstyle-plugin</artifactId>
@@ -449,7 +483,6 @@
                         </dependency>
                     </dependencies>
                     <configuration>
-                      <skip>${skipTests}</skip>
                         <configLocation>src/main/build-config/checkstyle.xml</configLocation>
                         <consoleOutput>true</consoleOutput>
                         <failsOnError>true</failsOnError>
@@ -521,20 +554,21 @@
                     <configuration>
                         <signature>
                             <groupId>org.codehaus.mojo.signature</groupId>
-                            <artifactId>java16</artifactId>
+                            <artifactId>java18</artifactId>
                             <version>1.0</version>
                         </signature>
                     </configuration>
                 </plugin>
                 <plugin>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>2.19.1</version>
+                    <version>2.20.1</version>
                     <configuration>
                         <redirectTestOutputToFile>true</redirectTestOutputToFile>
                         <argLine>${additionalRuntimeArgLine}</argLine>
                         <systemPropertyVariables>
-                           <!-- See test org.hibernate.ogm.test.utils.EnvironmentTest -->
-                           <hibernate.service.allow_crawling>false</hibernate.service.allow_crawling>
+                            <!-- See test org.hibernate.ogm.test.utils.EnvironmentTest -->
+                            <hibernate.service.allow_crawling>false</hibernate.service.allow_crawling>
+                            <project.build.directory>${project.build.directory}</project.build.directory>
                         </systemPropertyVariables>
                     </configuration>
                 </plugin>
@@ -605,29 +639,6 @@
                     </dependencies>
                 </plugin>
                 <plugin>
-                     <groupId>com.github.github</groupId>
-                     <artifactId>site-maven-plugin</artifactId>
-                     <version>0.12</version>
-                     <configuration>
-                         <message>Maven artifacts for ${project.version}</message>  <!-- git commit message -->
-                         <noJekyll>true</noJekyll>                                  <!-- disable webpage processing -->
-                         <outputDirectory>${user.dir}/target/mvn-repo</outputDirectory> <!-- matches distribution management repository url above -->
-                         <branch>refs/heads/mvn-repo</branch>                       <!-- remote branch name -->
-                         <includes><include>**/*</include></includes>
-                         <repositoryName>hibernate-ogm-cassandra</repositoryName>      <!-- github repo name -->
-                         <repositoryOwner>tduehr</repositoryOwner>    <!-- github username  -->
-                     </configuration>
-                     <executions>
-                       <!-- run site-maven-plugin's 'site' target as part of the build's normal 'deploy' phase -->
-                       <execution>
-                         <goals>
-                           <goal>site</goal>
-                         </goals>
-                         <phase>deploy</phase>
-                       </execution>
-                     </executions>
-                 </plugin>
-                <!-- <plugin>
                     <artifactId>maven-release-plugin</artifactId>
                     <version>2.5.3</version>
                     <configuration>
@@ -641,7 +652,7 @@
                         <localCheckout>true</localCheckout>
                         <tagNameFormat>@{project.version}</tagNameFormat>
                     </configuration>
-                </plugin> -->
+                </plugin>
                 <plugin>
                     <artifactId>maven-source-plugin</artifactId>
                     <version>3.0.0</version>
@@ -658,9 +669,6 @@
                 <plugin>
                     <artifactId>maven-deploy-plugin</artifactId>
                     <version>2.8.2</version>
-                    <configuration>
-                        <altDeploymentRepository>internal.repo::default::file://${user.dir}/target/mvn-repo</altDeploymentRepository>
-                    </configuration>
                 </plugin>
                 <plugin>
                     <artifactId>maven-help-plugin</artifactId>
@@ -668,7 +676,7 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-failsafe-plugin</artifactId>
-                    <version>2.19.1</version>
+                    <version>2.20.1</version>
                 </plugin>
                 <!-- Unpack test from hibernate-ogm-core to re-run them on each other module database integration -->
                 <plugin>
@@ -732,8 +740,8 @@
                                 <pluginExecution>
                                     <pluginExecutionFilter>
                                         <groupId>org.codehaus.gmaven</groupId>
-                                        <artifactId>gmaven-plugin</artifactId>
-                                        <versionRange>[1.4,)</versionRange>
+                                        <artifactId>groovy-maven-plugin</artifactId>
+                                        <versionRange>[2.0,)</versionRange>
                                         <goals>
                                             <goal>execute</goal>
                                         </goals>
@@ -791,9 +799,28 @@
                     </configuration>
                 </plugin>
                 <plugin>
+                    <groupId>com.github.joelittlejohn.embedmongo</groupId>
+                    <artifactId>embedmongo-maven-plugin</artifactId>
+                    <version>0.3.4</version>
+                    <configuration>
+                        <port>${embeddedMongoDbPort}</port>
+                        <logging>file</logging>
+                        <logFile>${embeddedMongoDbLogDir}/embedded-mongodb.log</logFile>
+                        <bindIp>${embeddedMongoDbBindIp}</bindIp>
+                        <version>${embeddedMongoDbVersion}</version>
+                    </configuration>
+                </plugin>
+                <plugin>
                     <groupId>org.codehaus.gmaven</groupId>
-                    <artifactId>gmaven-plugin</artifactId>
-                    <version>1.4</version>
+                    <artifactId>groovy-maven-plugin</artifactId>
+                    <version>2.0</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.codehaus.groovy</groupId>
+                            <artifactId>groovy-all</artifactId>
+                            <version>2.4.12</version>
+                        </dependency>
+                    </dependencies>
                 </plugin>
                 <plugin>
                     <groupId>com.savage7.maven.plugins</groupId>
@@ -818,40 +845,29 @@
         </pluginManagement>
     </build>
 
-  	<repositories>
-      <repository>
-              <id>hibernate-ogm-cassandra-mvn-repo</id>
-              <url>https://raw.github.com/tduehr/hibernate-ogm-cassandra/mvn-repo/</url>
-              <snapshots>
-                  <enabled>true</enabled>
-                  <updatePolicy>always</updatePolicy>
-              </snapshots>
-          </repository>
-        <repository>
-  			<id>jboss</id>
-  			<name>JBoss nexus</name>
-  			<url>http://repository.jboss.org/nexus/content/groups/public/</url>
-  			<releases>
-  				<enabled>true</enabled>
-  			</releases>
-  			<snapshots>
-  				<enabled>true</enabled>
-  			</snapshots>
-  		</repository>
-  		<repository>
-  			<id>jboss-snapshots</id>
-  			<name>JBoss snapshots</name>
-  			<url>https://snapshots.jboss.org/maven2/</url>
-  			<releases>
-  				<enabled>false</enabled>
-  			</releases>
-  			<snapshots>
-  				<enabled>true</enabled>
-  			</snapshots>
-  		</repository>
+    <repositories>
+        <!--
+        To build Hibernate OGM you have to add the JBoss Maven repository to your settings.xml
+        See also http://community.jboss.org/wiki/OverviewofHibernateOGM
+        -->
     </repositories>
 
     <profiles>
+        <profile>
+            <id>non-jigsaw</id>
+            <activation>
+                <!-- The versions we're using of Ehcache, Infinispan and Neo4J won't work on JDK9. Needs upgrading.  -->
+                <jdk>1.8</jdk>
+            </activation>
+            <modules>
+                <module>infinispan</module>
+                <module>infinispan-embedded</module>
+                <module>infinispan-remote</module>
+                <module>neo4j</module>
+                <!-- The WildFly modules require the other modules to be enabled too -->
+                <module>modules</module>
+            </modules>
+        </profile>
         <profile>
             <id>jigsaw</id>
             <activation>
@@ -859,7 +875,7 @@
                 <jdk>9</jdk>
             </activation>
             <properties>
-                <additionalRuntimeArgLine>--add-modules java.xml.bind</additionalRuntimeArgLine>
+                <additionalRuntimeArgLine>-Djdk.attach.allowAttachSelf=true --add-modules java.xml.bind</additionalRuntimeArgLine>
             </properties>
         </profile>
         <profile>
@@ -883,11 +899,29 @@
                     <name>skipDocs</name>
                     <value>!true</value>
                 </property>
+                <!-- And skip on Java 9 -->
                 <jdk>1.8</jdk>
             </activation>
             <modules>
                 <module>documentation</module>
             </modules>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>2.10.3</version>
+                        <executions>
+                            <execution>
+                                <id>generate-javadoc</id>
+                                <goals>
+                                    <goal>javadoc-no-fork</goal>
+                                </goals>
+                                <phase>prepare-package</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
         <profile>
             <id>distro</id>
@@ -896,6 +930,7 @@
                     <name>skipDistro</name>
                     <value>!true</value>
                 </property>
+                <!-- And skip on Java 9 -->
                 <jdk>1.8</jdk>
             </activation>
             <modules>
