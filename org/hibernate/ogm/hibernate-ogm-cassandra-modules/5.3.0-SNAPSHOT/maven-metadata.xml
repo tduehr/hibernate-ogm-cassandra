@@ -5,21 +5,21 @@
   <version>5.3.0-SNAPSHOT</version>
   <versioning>
     <snapshot>
-      <timestamp>20180308.214044</timestamp>
-      <buildNumber>1</buildNumber>
+      <timestamp>20180320.020716</timestamp>
+      <buildNumber>2</buildNumber>
     </snapshot>
-    <lastUpdated>20180308214044</lastUpdated>
+    <lastUpdated>20180320020716</lastUpdated>
     <snapshotVersions>
       <snapshotVersion>
         <extension>pom</extension>
-        <value>5.3.0-20180308.214044-1</value>
-        <updated>20180308214044</updated>
+        <value>5.3.0-20180320.020716-2</value>
+        <updated>20180320020716</updated>
       </snapshotVersion>
       <snapshotVersion>
         <classifier>wildfly-10-dist</classifier>
         <extension>zip</extension>
-        <value>5.3.0-20180308.214044-1</value>
-        <updated>20180308214044</updated>
+        <value>5.3.0-20180320.020716-2</value>
+        <updated>20180320020716</updated>
       </snapshotVersion>
     </snapshotVersions>
   </versioning>
